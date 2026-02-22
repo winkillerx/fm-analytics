@@ -1,17 +1,20 @@
 import { Redis } from "@upstash/redis";
 
 export default async function handler(req, res) {
-  // CORS (safe for analytics)
+  // 🔑 CORS — REQUIRED
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
+  // 🔑 Preflight — MUST END RESPONSE
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   try {
@@ -22,16 +25,15 @@ export default async function handler(req, res) {
 
     const event = {
       ...req.body,
-      ip: req.headers["x-forwarded-for"] || "unknown",
-      ua: req.headers["user-agent"] || "unknown",
       ts: Date.now(),
     };
 
     await redis.lpush("fm:events", JSON.stringify(event));
 
-    return res.status(200).json({ ok: true });
+    // 🔑 ALWAYS end response
+    res.status(200).json({ ok: true });
   } catch (err) {
     console.error("TRACK ERROR:", err);
-    return res.status(500).json({ error: "track failed" });
+    res.status(500).json({ error: "track failed" });
   }
 }
