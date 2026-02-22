@@ -1,82 +1,63 @@
 // api/track.js
 
-// In-memory log store (resets on cold start — expected on Vercel)
 let LOGS = global.__FM_LOGS || [];
 global.__FM_LOGS = LOGS;
 
+const ALLOWED_ORIGINS = [
+  "https://filmmatrix.net",
+  "https://www.filmmatrix.net"
+];
+
 export default function handler(req, res) {
-  /* ============================================================
-     CORS (CRITICAL)
-     ============================================================ */
-
-  const ALLOWED_ORIGINS = [
-    "https://filmmatrix.net",
-    "https://www.filmmatrix.net"
-  ];
-
   const origin = req.headers.origin;
 
+  // ✅ Dynamic CORS (CRITICAL)
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "86400");
 
-  // Handle preflight
+  // ✅ Preflight MUST exit cleanly
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
-  // Only allow POST
+  // ❌ Block anything else
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  /* ============================================================
-     Bot filter
-     ============================================================ */
-
   const ua = req.headers["user-agent"] || "";
+
+  // 🤖 Bot filter
   if (/bot|crawl|spider|slurp/i.test(ua)) {
     return res.json({ ok: true });
   }
 
-  /* ============================================================
-     Extract request data
-     ============================================================ */
-
   const ip =
     req.headers["x-forwarded-for"]?.split(",")[0] ||
-    req.socket?.remoteAddress ||
-    "unknown";
+    req.socket.remoteAddress;
 
-  const { event, page, ...meta } = req.body || {};
-
-  /* ============================================================
-     Store log entry
-     ============================================================ */
+  let body = {};
+  try {
+    body = req.body || {};
+  } catch {}
 
   const entry = {
     time: new Date().toISOString(),
-    event: event || "unknown",
-    page: page || "",
     ip,
-    ua,
-    meta
+    event: body.event || "unknown",
+    page: body.page || "",
+    ua
   };
 
   LOGS.push(entry);
 
-  // Prevent memory abuse
-  if (LOGS.length > 1000) {
-    LOGS = LOGS.slice(-500);
-    global.__FM_LOGS = LOGS;
-  }
-
-  /* ============================================================
-     Response
-     ============================================================ */
+  // keep memory safe
+  if (LOGS.length > 500) LOGS.shift();
 
   return res.json({ ok: true });
 }
