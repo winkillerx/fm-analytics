@@ -1,19 +1,10 @@
-// /api/track.js
-const ALLOWED_ORIGINS = [
-  "https://filmmatrix.net",
-  "https://www.filmmatrix.net"
-];
+import { Redis } from "@upstash/redis";
 
-export default function handler(req, res) {
-  const origin = req.headers.origin;
-
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-
+export default async function handler(req, res) {
+  // CORS (safe for analytics)
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -23,24 +14,24 @@ export default function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // INIT LOG STORE (per warm instance)
-  globalThis.FM_LOGS ??= [];
+  try {
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
 
-  const ip =
-    req.headers["x-forwarded-for"]?.split(",")[0] ||
-    req.socket?.remoteAddress ||
-    "unknown";
+    const event = {
+      ...req.body,
+      ip: req.headers["x-forwarded-for"] || "unknown",
+      ua: req.headers["user-agent"] || "unknown",
+      ts: Date.now(),
+    };
 
-  const log = {
-    time: new Date().toISOString(),
-    ip,
-    ua: req.headers["user-agent"] || "",
-    event: req.body?.event || "unknown",
-    page: req.body?.page || "",
-  };
+    await redis.lpush("fm:events", JSON.stringify(event));
 
-  globalThis.FM_LOGS.unshift(log);
-  globalThis.FM_LOGS = globalThis.FM_LOGS.slice(0, 100);
-
-  return res.status(200).json({ ok: true });
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("TRACK ERROR:", err);
+    return res.status(500).json({ error: "track failed" });
+  }
 }
