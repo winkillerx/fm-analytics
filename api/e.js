@@ -19,11 +19,15 @@ export default async function handler(req, res) {
       token: process.env.UPSTASH_REDIS_REST_TOKEN,
     });
 
-    await redis.lpush(
-      "fm:events",
-      JSON.stringify({ ...req.body, ts: Date.now() })
-    );
+    // Capture IP and User-Agent automatically from the request headers
+    const eventData = { 
+      ...req.body, 
+      ts: Date.now(),
+      ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+      ua: req.headers['user-agent']
+    };
 
+    await redis.lpush("fm:events", JSON.stringify(eventData));
     return res.status(200).json({ ok: true });
   } catch (err) {
     console.error("E ERROR:", err);
