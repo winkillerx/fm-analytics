@@ -1,27 +1,25 @@
-// /api/logs.js
-const ALLOWED_ORIGINS = [
-  "https://filmmatrix.net",
-  "https://www.filmmatrix.net"
-];
+import { Redis } from "@upstash/redis";
 
-export default function handler(req, res) {
-  const origin = req.headers.origin;
-
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
+export default async function handler(req, res) {
+  // OPTIONAL protection (recommended for prod)
+  if (process.env.LOGS_SECRET) {
+    if (req.headers.authorization !== `Bearer ${process.env.LOGS_SECRET}`) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
   }
 
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  try {
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    const raw = await redis.lrange("fm:events", 0, 99);
+    const logs = raw.map((r) => JSON.parse(r));
+
+    return res.status(200).json(logs);
+  } catch (err) {
+    console.error("LOG READ ERROR:", err);
+    return res.status(500).json([]);
   }
-
-  if (req.method !== "GET") {
-    return res.status(405).end();
-  }
-
-  const logs = globalThis.FM_LOGS || [];
-  res.status(200).json({ logs });
 }
