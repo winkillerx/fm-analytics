@@ -1,7 +1,24 @@
-let LOGS = global.__FM_LOGS || [];
-global.__FM_LOGS = LOGS;
+// api/track.js
+
+let LOGS = globalThis.FM_LOGS || [];
+globalThis.FM_LOGS = LOGS;
+
+const ALLOWED_ORIGINS = [
+  "https://filmmatrix.net",
+  "https://www.filmmatrix.net"
+];
 
 export default function handler(req, res) {
+  const origin = req.headers.origin;
+
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Preflight
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -11,26 +28,30 @@ export default function handler(req, res) {
   }
 
   const ua = req.headers["user-agent"] || "";
-
-  if (/bot|crawl|spider|slurp/i.test(ua)) {
-    return res.json({ ok: true });
-  }
-
   const ip =
     req.headers["x-forwarded-for"]?.split(",")[0] ||
-    req.socket.remoteAddress;
+    req.socket?.remoteAddress ||
+    "unknown";
 
   const body = req.body || {};
 
-  LOGS.push({
+  const entry = {
     time: new Date().toISOString(),
-    ip,
     event: body.event || "unknown",
     page: body.page || "",
-    ua
-  });
+    title: body.title || "",
+    type: body.type || "",
+    ip,
+    userAgent: ua,
+    device: /mobile/i.test(ua) ? "mobile" : "desktop"
+  };
 
-  if (LOGS.length > 500) LOGS.shift();
+  LOGS.push(entry);
 
-  res.json({ ok: true });
+  // Keep last 200 logs only
+  if (LOGS.length > 200) {
+    LOGS.splice(0, LOGS.length - 200);
+  }
+
+  res.status(200).json({ ok: true });
 }
