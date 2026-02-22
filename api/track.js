@@ -1,61 +1,44 @@
-// api/track.js
-import crypto from "crypto";
+// /api/track.js
 
-/**
- * In-memory event log (resets on cold start)
- */
-export const logs = [];
+let LOGS = global.__FM_LOGS || [];
+global.__FM_LOGS = LOGS;
 
-/**
- * Basic bot filter
- */
-function isBot(req) {
-  const ua = req.headers["user-agent"] || "";
-  return /bot|crawl|spider|slurp|facebook|discord|preview/i.test(ua);
-}
+export default function handler(req, res) {
+  // ✅ CORS HEADERS (CRITICAL)
+  res.setHeader("Access-Control-Allow-Origin", "https://www.filmmatrix.net");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-/**
- * Extract IP (Cloudflare / Vercel aware)
- */
-function getIP(req) {
-  return (
-    req.headers["cf-connecting-ip"] ||
-    req.headers["x-forwarded-for"]?.split(",")[0] ||
-    req.socket?.remoteAddress ||
-    "unknown"
-  );
-}
+  // ✅ Handle preflight
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
-export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).end();
   }
 
-  if (isBot(req)) {
-    return res.json({ ok: true, bot: true });
-  }
+  const ua = req.headers["user-agent"] || "";
 
-  try {
-    const body = req.body || {};
-    const ip = getIP(req);
-
-    const event = {
-      time: new Date().toISOString(),
-      event: body.event || "unknown",
-      page: body.page || "/",
-      title: body.title || null,
-      id: body.id || null,
-      type: body.type || null,
-      query: body.query || null,
-      ip,
-      ua: req.headers["user-agent"] || "unknown"
-    };
-
-    logs.push(event);
-    if (logs.length > 200) logs.shift();
-
+  // 🤖 Bot filter
+  if (/bot|crawl|spider|slurp/i.test(ua)) {
     return res.json({ ok: true });
-  } catch (err) {
-    return res.status(500).json({ error: "Tracking failed" });
   }
+
+  const ip =
+    req.headers["x-forwarded-for"]?.split(",")[0] ||
+    req.socket.remoteAddress ||
+    "unknown";
+
+  const log = {
+    time: new Date().toISOString(),
+    event: req.body?.event || "unknown",
+    page: req.body?.page || "",
+    ip,
+    ua
+  };
+
+  LOGS.push(log);
+
+  res.status(200).json({ ok: true });
 }
