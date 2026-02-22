@@ -1,4 +1,4 @@
-// api/logs.js
+// /api/logs.js
 
 const ALLOWED_ORIGINS = [
   "https://filmmatrix.net",
