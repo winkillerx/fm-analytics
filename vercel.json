@@ -1,5 +1,7 @@
 {
-  "routes": [
-    { "src": "/", "dest": "/admin.html" }
-  ]
+  "functions": {
+    "api/*.js": {
+      "memory": 128
+    }
+  }
 }
