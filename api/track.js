@@ -1,7 +1,4 @@
-// api/track.js
-
-let LOGS = globalThis.FM_LOGS || [];
-globalThis.FM_LOGS = LOGS;
+// /api/track.js
 
 const ALLOWED_ORIGINS = [
   "https://filmmatrix.net",
@@ -24,7 +21,12 @@ export default function handler(req, res) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).end();
+  }
+
+  // 🔒 Init global log store (persists per warm lambda)
+  if (!globalThis.FM_LOGS) {
+    globalThis.FM_LOGS = [];
   }
 
   const ua = req.headers["user-agent"] || "";
@@ -33,25 +35,19 @@ export default function handler(req, res) {
     req.socket?.remoteAddress ||
     "unknown";
 
-  const body = req.body || {};
-
-  const entry = {
+  const log = {
     time: new Date().toISOString(),
-    event: body.event || "unknown",
-    page: body.page || "",
-    title: body.title || "",
-    type: body.type || "",
     ip,
-    userAgent: ua,
-    device: /mobile/i.test(ua) ? "mobile" : "desktop"
+    ua,
+    event: req.body?.event || "unknown",
+    page: req.body?.page || "",
   };
 
-  LOGS.push(entry);
+  // ✅ STORE LOG
+  globalThis.FM_LOGS.unshift(log);
 
-  // Keep last 200 logs only
-  if (LOGS.length > 200) {
-    LOGS.splice(0, LOGS.length - 200);
-  }
+  // Limit memory (VERY important on Vercel)
+  globalThis.FM_LOGS = globalThis.FM_LOGS.slice(0, 200);
 
   res.status(200).json({ ok: true });
 }
