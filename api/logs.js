@@ -1,5 +1,4 @@
 // /api/logs.js
-
 const ALLOWED_ORIGINS = [
   "https://filmmatrix.net",
   "https://www.filmmatrix.net"
@@ -19,5 +18,10 @@ export default function handler(req, res) {
     return res.status(200).end();
   }
 
-  res.status(200).json(globalThis.FM_LOGS || []);
+  if (req.method !== "GET") {
+    return res.status(405).end();
+  }
+
+  const logs = globalThis.FM_LOGS || [];
+  res.status(200).json({ logs });
 }
