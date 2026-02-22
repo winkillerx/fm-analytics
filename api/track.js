@@ -1,5 +1,4 @@
 // /api/track.js
-
 const ALLOWED_ORIGINS = [
   "https://filmmatrix.net",
   "https://www.filmmatrix.net"
@@ -14,22 +13,19 @@ export default function handler(req, res) {
 
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
 
-  // Preflight
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
 
   if (req.method !== "POST") {
-    return res.status(405).end();
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // 🔒 Init global log store (persists per warm lambda)
-  if (!globalThis.FM_LOGS) {
-    globalThis.FM_LOGS = [];
-  }
+  // INIT LOG STORE (per warm instance)
+  globalThis.FM_LOGS ??= [];
 
-  const ua = req.headers["user-agent"] || "";
   const ip =
     req.headers["x-forwarded-for"]?.split(",")[0] ||
     req.socket?.remoteAddress ||
@@ -38,16 +34,13 @@ export default function handler(req, res) {
   const log = {
     time: new Date().toISOString(),
     ip,
-    ua,
+    ua: req.headers["user-agent"] || "",
     event: req.body?.event || "unknown",
     page: req.body?.page || "",
   };
 
-  // ✅ STORE LOG
   globalThis.FM_LOGS.unshift(log);
+  globalThis.FM_LOGS = globalThis.FM_LOGS.slice(0, 100);
 
-  // Limit memory (VERY important on Vercel)
-  globalThis.FM_LOGS = globalThis.FM_LOGS.slice(0, 200);
-
-  res.status(200).json({ ok: true });
+  return res.status(200).json({ ok: true });
 }
